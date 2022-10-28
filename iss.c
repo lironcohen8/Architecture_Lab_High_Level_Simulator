@@ -30,8 +30,9 @@
 #define MEM_MASK	(MEM_SIZE - 1)
 unsigned int mem[MEM_SIZE];
 unsigned int num_of_cmds = 0;
+bool is_halt = false;
 signed int regs[NUM_OF_REGS];
-command cmd_arr[num_of_cmds];
+command cmds_arr[num_of_cmds];
 
 #define OPCODE_MASK 0x3E000000
 #define OPCODE_SHIFT 0x19
@@ -67,7 +68,8 @@ static void parse_command(char* line, command* cmd) {
 }
 
 /* executes the relevant command by opcode */
-static void exec_command(command* cmd) {
+static void exec_command() {
+	command *cmd = cmds_arr[pc];
 	if (cmd->opcode == ADD) run_add_cmd(cmd);
 	else if (cmd->opcode == SUB) run_sub_cmd(cmd);
 	else if (cmd->opcode == LSF) run_lsf_cmd(cmd);
@@ -83,7 +85,7 @@ static void exec_command(command* cmd) {
 	else if (cmd->opcode == JEQ) run_jeq_cmd(cmd);
 	else if (cmd->opcode == JNE) run_jne_cmd(cmd);
 	else if (cmd->opcode == JIN) run_jin_cmd(cmd);
-	else return; // halt
+	else is_halt = true; // halt
 }
 
 static void run_add_cmd(command* cmd) {
@@ -173,6 +175,7 @@ static int sign_ext_imm(int imm) {
 	return imm;
 }
 
+/* updates PC for non-jump commands */
 static void update_pc() {
 	if (is_jump_cmd() == 0) {
 				pc += 1;
@@ -186,14 +189,14 @@ int main(int argc, char *argv[]) {
 	if (argc != 2) {
 		printf("number of args should be one.\n");
 		return -1;
-	} else {
+	}
+	else {
 		open_input_and_output_files();
 		load_commands_from_file();
-		for (int i = 0; i < num_of_cmds; i++) {
+		while (!is_halt) {
 			parse_command();
-			trace_dump();
-			exec_command();
 			trace_command();
+			exec_command();
 			update_pc();
 		}
 		close_files();
