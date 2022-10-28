@@ -243,6 +243,7 @@ static void trace_command() {
     }
 }
 
+/* returns string representation of current command's opcode */
 static char* get_curr_opcode_str() {
 	int opcode = cmd->opcode;
 	if      (opcode == ADD) return "ADD";
