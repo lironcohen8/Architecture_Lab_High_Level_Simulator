@@ -30,7 +30,14 @@
 #define MEM_MASK	(MEM_SIZE - 1)
 unsigned int mem[MEM_SIZE];
 unsigned int num_of_cmds = 0;
-unsigned int regs[NUM_OF_REGS];
+bool is_halt = false;
+signed int regs[NUM_OF_REGS];
+
+#define TRACE_FILE_NAME = "trace.txt"
+#define SRAM_OUT_FILE_NAME = "sram_out.txt"
+File *trace_file;
+File *sram_out_file;
+File *input_file;
 
 #define OPCODE_MASK 0x3E000000
 #define OPCODE_SHIFT 0x19
@@ -41,6 +48,7 @@ unsigned int regs[NUM_OF_REGS];
 #define SRC1_MASK 0x00070000
 #define SRC1_SHIFT 0x10
 #define IMM_MASK 0x0000FFFF
+#define SIGN_EXT_MASK 0x00008000
 
 typedef struct {
     int8_t opcode;
@@ -53,18 +61,52 @@ typedef struct {
 
 int pc = 0;
 
+/* opens input_and_output files */
+static void open_input_and_output_files(char* filename) {
+	fopen_s(&input_file, file_name, "r");
+    if (input_file == NULL) {
+        printf("error opening file %s\n", file_name);
+    }
+
+	fopen_s(&trace_file, TRACE_FILE_NAME, "w");
+	if (trace_file == NULL) {
+        printf("error opening trace file\n");
+    }
+
+	fopen_s(&sram_out_file, SRAM_OUT_FILE_NAME, "w");
+	if (sram_file == NULL) {
+        printf("error opening sram out file\n");
+    }
+}
+
+/* loads memory from input file */
+static void load_memory_from_input_file() {
+	char line_buffer[8];
+	int instructions_count = 0;
+
+	while ((read = getline(&line_buffer, 8, file)) != -1) {
+    	mem[instructions_count++] = line_buffer;
+	}
+}
+
 /* constructs the command from the input line */
-static void parse_command(char* line, command* cmd) {
+static void parse_command() {
+	char *line[9];
+	sprintf(line, "%d", mem[pc]);
+
     cmd->opcode = line & 0xFFF;
     cmd->dst = (line >> OPCODE_SHIFT) & OPCODE_MASK;
     cmd->src0 = (line >> SRC0_SHIFT) & SRC0_MASK;
     cmd->src1 = (line >> SRC1_SHIFT) & SRC1_MASK;
     cmd->imm = (line) & IMM_MASK;
     cmd->raw_cmd = line;
+
+	regs[1] = sign_ext_imm(imm);
 }
 
 /* executes the relevant command by opcode */
-static void exec_command(command* cmd) {
+static void exec_command() {
+	command *cmd = cmds_arr[pc];
 	if (cmd->opcode == ADD) run_add_cmd(cmd);
 	else if (cmd->opcode == SUB) run_sub_cmd(cmd);
 	else if (cmd->opcode == LSF) run_lsf_cmd(cmd);
@@ -80,7 +122,7 @@ static void exec_command(command* cmd) {
 	else if (cmd->opcode == JEQ) run_jeq_cmd(cmd);
 	else if (cmd->opcode == JNE) run_jne_cmd(cmd);
 	else if (cmd->opcode == JIN) run_jin_cmd(cmd);
-	else return; // halt
+	else is_halt = true; // halt
 }
 
 static void run_add_cmd(command* cmd) {
@@ -92,70 +134,115 @@ static void run_sub_cmd(command* cmd) {
 }
 
 static void run_lsf_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = regs[cmd->src0] << abs(regs[cmd->src1]);
 }
 
 static void run_rsf_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = regs[cmd->src0] >> abs(regs[cmd->src1]);
 }
 
 static void run_and_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = regs[cmd->src0] & regs[cmd->src1];
 }
 
 static void run_or_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = regs[cmd->src0] | regs[cmd->src1];
 }
 
 static void run_xor_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = regs[cmd->src0] ^ regs[cmd->src1];
 }
 
 static void run_lhi_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = (cmd->imm) << 16;
 }
 
 static void run_ld_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[cmd->dst] = mem[regs[cmd->src1]];
 }
 
 static void run_st_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	mem[regs[cmd->src1]] = regs[cmd->src0];
 }
 
 static void run_jlt_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	if (regs[cmd->src0] < regs[cmd->src1]) {
+		regs[7] = pc;
+		pc = cmd->imm;
+	}
 }
 
 static void run_jle_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	if (regs[cmd->src0] <= regs[cmd->src1]) {
+	regs[7] = pc;
+	pc = cmd->imm;
+	}
 }
 
 static void run_jeq_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	if (regs[cmd->src0] == regs[cmd->src1]) {
+		regs[7] = pc;
+		pc = cmd->imm;
+	}
 }
 
 static void run_jne_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	if (regs[cmd->src0] != regs[cmd->src1]) {
+		regs[7] = pc;
+		pc = cmd->imm;
+	}
 }
 
 static void run_jin_cmd(command* cmd) {
-	regs[cmd->dst] = regs[cmd->src0] + regs[cmd->src1];
+	regs[7] = pc;
+	pc = cmd->regs[cmd->src0];
 }
 
+static bool is_jump_cmd(command *cmd) {
+	return cmd->opcode == JLT |  
+		   cmd->opcode == JLE | 
+		   cmd->opcode == JEQ | 
+		   cmd->opcode == JNE | 
+		   cmd->opcode == JIN
+}
+
+static int sign_ext_imm(int imm) {
+	// if we need to extend with 1s
+	if (SIGN_EXT_MASK & imm) {
+        return imm + 0xFFFF0000;
+    }
+	return imm;
+}
+
+/* updates PC for non-jump commands */
+static void update_pc() {
+	if (is_jump_cmd() == 0) {
+				pc += 1;
+	}
+	if (pc > 0xffff) {
+		pc = 0;
+	}
+}
+
+static void close_files() {
+	fclose(input_file);
+	fclose(trace_file);
+	fclose(sram_out_file);
+}
 
 int main(int argc, char *argv[]) {
 	if (argc != 2) {
-		printf("usage: asm program_name\n");
+		printf("number of args should be one\n");
 		return -1;
-	} else {
-		open_files();
-		load_commands_from_file();
-		for (int i = 0; i < num_of_cmds; i++) {
+	}
+	else {
+		open_input_and_output_files(args[1]);
+		load_memory_from_input_file();
+		while (!is_halt) {
 			parse_command();
-			trace_dump();
-			exec_command();
 			trace_command();
+			exec_command();
+			update_pc();
 		}
 		close_files();
 		free_memory();
