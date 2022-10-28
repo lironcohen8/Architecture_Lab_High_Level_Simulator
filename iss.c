@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #define ADD 0
 #define SUB 1
@@ -24,7 +26,6 @@
 #define JIN 20
 #define HLT 24
 
-#define NUM_OF_REGS = (8)
 #define MEM_SIZE_BITS	(16)
 #define MEM_SIZE	(1 << MEM_SIZE_BITS)
 #define MEM_MASK	(MEM_SIZE - 1)
@@ -32,14 +33,11 @@ unsigned int mem[MEM_SIZE];
 unsigned int program_length = 0;
 unsigned int inst_cnt = 0;
 bool is_halt = false;
-signed int regs[NUM_OF_REGS];
+signed int regs[8];
 command *cmd;
-
-#define TRACE_FILE_NAME = "trace.txt"
-#define SRAM_OUT_FILE_NAME = "sram_out.txt"
-File *trace_file;
-File *sram_out_file;
-File *input_file;
+FILE *trace_file;
+FILE *sram_out_file;
+FILE *input_file;
 char *input_file_name;
 
 #define OPCODE_MASK 0x3E000000
@@ -55,9 +53,9 @@ char *input_file_name;
 
 typedef struct {
     int8_t opcode;
-    int4_t dst;
-    int4_t src0;
-    int4_t src1;
+    int8_t dst;
+    int8_t src0;
+    int8_t src1;
     int16_t imm;
     char* raw_cmd;
 } command;
@@ -66,18 +64,18 @@ int pc = 0;
 
 /* opens input_and_output files */
 static void open_input_and_output_files() {
-	fopen_s(&input_file, input_file_name, "r");
+	fopen(&input_file, input_file_name, "r");
     if (input_file == NULL) {
-        printf("error opening file %s\n", file_name);
+        printf("error opening file %s\n", input_file_name);
     }
 
-	fopen_s(&trace_file, TRACE_FILE_NAME, "w");
+	fopen(&trace_file, "trace.txt", "w");
 	if (trace_file == NULL) {
         printf("error opening trace file\n");
     }
 
-	fopen_s(&sram_out_file, SRAM_OUT_FILE_NAME, "w");
-	if (sram_file == NULL) {
+	fopen(&sram_out_file, "sram_out.txt", "w");
+	if (sram_out_file == NULL) {
         printf("error opening sram out file\n");
     }
 }
@@ -86,7 +84,7 @@ static void open_input_and_output_files() {
 static void load_memory_from_input_file() {
 	char line_buffer[8];
 
-	while ((read = getline(&line_buffer, 8, file)) != -1) {
+	while (getline(&line_buffer, 8, input_file) != -1) {
     	mem[program_length++] = line_buffer;
 	}
 }
@@ -98,17 +96,17 @@ static void trace_first_line() {
 
 /* constructs the command from the input line */
 static void parse_command() {
-	char *line[9];
-	sprintf(line, "%d", mem[pc]);
+	int32_t row;
+	sprintf(row, "%d", mem[pc]);
 
-    cmd->opcode = line & 0xFFF;
-    cmd->dst = (line >> OPCODE_SHIFT) & OPCODE_MASK;
-    cmd->src0 = (line >> SRC0_SHIFT) & SRC0_MASK;
-    cmd->src1 = (line >> SRC1_SHIFT) & SRC1_MASK;
-    cmd->imm = (line) & IMM_MASK;
-    cmd->raw_cmd = line;
+    cmd->opcode = row & 0xFFF;
+    cmd->dst = (row >> OPCODE_SHIFT) & OPCODE_MASK;
+    cmd->src0 = (row >> SRC0_SHIFT) & SRC0_MASK;
+    cmd->src1 = (row >> SRC1_SHIFT) & SRC1_MASK;
+    cmd->imm = (row) & IMM_MASK;
+    cmd->raw_cmd = row;
 
-	regs[1] = sign_ext_imm(imm);
+	regs[1] = sign_ext_imm(cmd->imm);
 }
 
 /* executes the relevant command by opcode */
@@ -210,7 +208,7 @@ static bool is_jump_cmd() {
 		   cmd->opcode == JLE | 
 		   cmd->opcode == JEQ | 
 		   cmd->opcode == JNE | 
-		   cmd->opcode == JIN
+		   cmd->opcode == JIN;
 }
 
 /* sign extention the imm */
@@ -229,16 +227,16 @@ static void trace_command() {
     fprintf(trace_file, "dst = %d, src0 = %d, src1 = %d, immediate = %08x\n", cmd->dst, cmd->src0, cmd->src1, cmd->imm);
     fprintf(trace_file, "r[0] = %08x r[1] = %08x r[2] = %08x r[3] = %08x \nr[4] = %08x r[5] = %08x r[6] = %08x r[7] = %08x \n\n", regs[0], regs[1], regs[2], regs[3], regs[4], regs[5], regs[6], regs[7]);
 
-    if ((opcode == ADD) || (opcode == SUB) || (opcode == LSF) || (opcode == RSF) || (opcode == AND) || (opcode == OR) || (opcode == XOR) || (opcode == LHI)) {
-        fprintf(trace_file, ">>>> EXEC: R[%d] = %d %s %d <<<<\n\n", cmd->dst, regs[src0], get_curr_opcode_str(), regs[src1]);
+    if ((cmd->opcode == ADD) || (cmd->opcode == SUB) || (cmd->opcode == LSF) || (cmd->opcode == RSF) || (cmd->opcode == AND) || (cmd->opcode == OR) || (cmd->opcode == XOR) || (cmd->opcode == LHI)) {
+        fprintf(trace_file, ">>>> EXEC: R[%d] = %d %s %d <<<<\n\n", cmd->dst, regs[cmd->src0], get_curr_opcode_str(), regs[cmd->src1]);
     }
-    else if (opcode == LD) {
-        fprintf(trace_file, ">>>> EXEC: R[%d] = MEM[%d] = %08x <<<<\n\n", cmd->dst, regs[cmd->src1], output_arr[regs[src1]]);
+    else if (cmd->opcode == LD) {
+        fprintf(trace_file, ">>>> EXEC: R[%d] = MEM[%d] = %08x <<<<\n\n", cmd->dst, regs[cmd->src1], regs[cmd->src1]);
     }
-    else if (opcode == ST) {
+    else if (cmd->opcode == ST) {
         fprintf(trace_file, ">>>> EXEC: MEM[%d] = R[%d] = %08x <<<<\n\n", regs[cmd->src1], cmd->drc0, regs[cmd->src0]);
     }
-    else if (opcode == HLT) {
+    else if (cmd->opcode == HLT) {
         fprintf(trace_file, ">>>> EXEC: HALT at PC %04x<<<<\n", pc);
     }
 }
@@ -278,7 +276,7 @@ static void update_pc() {
 /* writes memory into sram_out file */
 static void dump_sram_to_file() {
     for (int i = 0; i < MEM_SIZE; i++) {
-        fprintf(sram_file,"%08X\n",mem[i]);
+        fprintf(sram_out_file,"%08X\n",mem[i]);
     }
 }
 
@@ -299,7 +297,7 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 	else {
-		open_input_and_output_files(args[1]);
+		open_input_and_output_files(argv[1]);
 		load_memory_from_input_file();
 		trace_first_line();
 		while (!is_halt) {
