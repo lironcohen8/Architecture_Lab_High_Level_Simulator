@@ -90,9 +90,14 @@ static void load_memory_from_input_file() {
     }
 }
 
-/* writes the first lineof the trace file */
+/* writes the first line of the trace file */
 static void trace_first_line() {
 	fprintf(trace_file, "program %s loaded, %d lines\n\n", input_file_name, program_length);
+}
+
+/* allocates memory for command */
+static void allocate_memory_for_command() {
+	cmd = (command*)malloc(sizeof(command*));
 }
 
 /* sign extention the imm */
@@ -161,12 +166,18 @@ static void run_jlt_cmd() {
 		regs[7] = pc;
 		pc = cmd->imm;
 	}
+	else {
+		pc++;
+	}
 }
 
 static void run_jle_cmd() {
 	if (regs[cmd->src0] <= regs[cmd->src1]) {
 	regs[7] = pc;
 	pc = cmd->imm;
+	}
+	else {
+		pc++;
 	}
 }
 
@@ -175,12 +186,18 @@ static void run_jeq_cmd() {
 		regs[7] = pc;
 		pc = cmd->imm;
 	}
+	else {
+		pc++;
+	}
 }
 
 static void run_jne_cmd() {
 	if (regs[cmd->src0] != regs[cmd->src1]) {
 		regs[7] = pc;
 		pc = cmd->imm;
+	}
+	else {
+		pc++;
 	}
 }
 
@@ -209,13 +226,14 @@ static void exec_command() {
 	else is_halt = true; // halt
 }
 
-/* returns true if a command is a jump command and false otherwise */
-static bool is_jump_cmd() {
+/* returns true if a command is a jump or halt command and false otherwise */
+static bool is_jump_or_halt_cmd() {
 	return (cmd->opcode == JLT) |  
 		   (cmd->opcode == JLE) | 
 		   (cmd->opcode == JEQ) | 
 		   (cmd->opcode == JNE) | 
-		   (cmd->opcode == JIN);
+		   (cmd->opcode == JIN) |
+		   (cmd->opcode == HLT);
 }
 
 /* returns string representation of current command's opcode */
@@ -251,24 +269,33 @@ static void trace_command() {
         fprintf(trace_file, ">>>> EXEC: R[%d] = %d %s %d <<<<\n\n", cmd->dst, regs[cmd->src0], get_curr_opcode_str(), regs[cmd->src1]);
     }
     else if (cmd->opcode == LD) {
-        fprintf(trace_file, ">>>> EXEC: R[%d] = MEM[%d] = %08x <<<<\n\n", cmd->dst, regs[cmd->src1], regs[cmd->src1]);
+        fprintf(trace_file, ">>>> EXEC: R[%d] = MEM[%d] = %08x <<<<\n\n", cmd->dst, regs[cmd->src1], mem[regs[cmd->src1]]);
     }
     else if (cmd->opcode == ST) {
         fprintf(trace_file, ">>>> EXEC: MEM[%d] = R[%d] = %08x <<<<\n\n", regs[cmd->src1], cmd->src0, regs[cmd->src0]);
     }
+	else if ((cmd->opcode == JLT) || (cmd->opcode == JLE) || (cmd->opcode == JEQ) || (cmd->opcode == JNE) || (cmd->opcode == JIN)) {
+		fprintf(trace_file, ">>>> EXEC: %s %d, %d, %d <<<<\n\n", get_curr_opcode_str(), regs[cmd->src0], regs[cmd->src1],  pc);
+	}
     else if (cmd->opcode == HLT) {
         fprintf(trace_file, ">>>> EXEC: HALT at PC %04x<<<<\n", pc);
     }
 }
 
-/* updates PC for non-jump commands */
-static void update_pc() {
-	if (is_jump_cmd() == 0) {
-				pc += 1;
+/* updates PC for non-jump commands and increments instructions count */
+static void update_pc_and_inst_cnt() {
+	if (!is_jump_or_halt_cmd()) {
+		pc++;
 	}
 	if (pc > 0xffff) {
 		pc = 0;
 	}
+	inst_cnt++;
+}
+
+/* writes the last line of the trace file */
+static void trace_last_line() {
+	fprintf(trace_file, "sim finished at pc %d, %d instructions", pc, inst_cnt);
 }
 
 /* writes memory into sram_out file */
@@ -285,8 +312,9 @@ static void close_files() {
 	fclose(sram_out_file);
 }
 
-// TODO fill if needed
+/* free memory */
 static void free_memory() {
+	free(cmd);
 }
 
 int main(int argc, char *argv[]) {
@@ -299,12 +327,14 @@ int main(int argc, char *argv[]) {
 		open_input_and_output_files();
 		load_memory_from_input_file();
 		trace_first_line();
+		allocate_memory_for_command();
 		while (!is_halt) {
 			parse_command();
 			trace_command();
 			exec_command();
-			update_pc();
+			update_pc_and_inst_cnt();
 		}
+		trace_last_line();
 		dump_sram_to_file();
 		close_files();
 		free_memory();
