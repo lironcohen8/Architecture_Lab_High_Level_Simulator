@@ -43,6 +43,7 @@ typedef struct {
 static unsigned int program_length = 0;
 static unsigned int inst_cnt = 0;
 static bool is_halt = false;
+static bool is_jump_taken = false;
 static signed int regs[8];
 static command *cmd;
 static FILE *trace_file;
@@ -62,6 +63,7 @@ static char *input_file_name;
 #define SIGN_EXT_MASK 0x00008000
 
 int pc = 0;
+int next_pc = 0;
 
 /* opens input_and_output files */
 static void open_input_and_output_files() {
@@ -86,7 +88,7 @@ static void load_memory_from_input_file() {
 	char line_buffer[8];
 
 	while (fgets(line_buffer, 8 + 2, input_file) != NULL) {
-        sscanf_s(line_buffer, "%X", &mem[program_length++]);
+        sscanf_s(line_buffer, "%x", &mem[program_length++]);
     }
 }
 
@@ -163,47 +165,46 @@ static void run_st_cmd() {
 
 static void run_jlt_cmd() {
 	if (regs[cmd->src0] < regs[cmd->src1]) {
-		regs[7] = pc;
-		pc = cmd->imm;
+		next_pc = cmd->imm;
+		is_jump_taken = true;
 	}
 	else {
-		pc++;
+		next_pc = pc + 1;
 	}
 }
 
 static void run_jle_cmd() {
 	if (regs[cmd->src0] <= regs[cmd->src1]) {
-	regs[7] = pc;
-	pc = cmd->imm;
+		next_pc = cmd->imm;
+		is_jump_taken = true;
 	}
 	else {
-		pc++;
+		next_pc = pc + 1;
 	}
 }
 
 static void run_jeq_cmd() {
 	if (regs[cmd->src0] == regs[cmd->src1]) {
-		regs[7] = pc;
-		pc = cmd->imm;
+		next_pc = cmd->imm;
+		is_jump_taken = true;
 	}
 	else {
-		pc++;
+		next_pc = pc + 1;
 	}
 }
 
 static void run_jne_cmd() {
 	if (regs[cmd->src0] != regs[cmd->src1]) {
-		regs[7] = pc;
-		pc = cmd->imm;
+		next_pc = cmd->imm;
+		is_jump_taken = true;
 	}
 	else {
-		pc++;
+		next_pc = pc + 1;
 	}
 }
 
 static void run_jin_cmd() {
-	regs[7] = pc;
-	pc = regs[cmd->src0];
+	next_pc = regs[cmd->src0];
 }
 
 /* executes the relevant command by opcode */
@@ -234,6 +235,11 @@ static bool is_jump_or_halt_cmd() {
 		   (cmd->opcode == JNE) | 
 		   (cmd->opcode == JIN) |
 		   (cmd->opcode == HLT);
+}
+
+/* update reg 7 to next pc if branch is taken */
+static void update_reg_7() {
+	regs[7] = pc;
 }
 
 /* returns string representation of current command's opcode */
@@ -275,17 +281,20 @@ static void trace_command() {
         fprintf(trace_file, ">>>> EXEC: MEM[%d] = R[%d] = %08x <<<<\n\n", regs[cmd->src1], cmd->src0, regs[cmd->src0]);
     }
 	else if ((cmd->opcode == JLT) || (cmd->opcode == JLE) || (cmd->opcode == JEQ) || (cmd->opcode == JNE) || (cmd->opcode == JIN)) {
-		fprintf(trace_file, ">>>> EXEC: %s %d, %d, %d <<<<\n\n", get_curr_opcode_str(), regs[cmd->src0], regs[cmd->src1],  pc);
+		fprintf(trace_file, ">>>> EXEC: %s %d, %d, %d <<<<\n\n", get_curr_opcode_str(), regs[cmd->src0], regs[cmd->src1],  next_pc);
 	}
     else if (cmd->opcode == HLT) {
         fprintf(trace_file, ">>>> EXEC: HALT at PC %04x<<<<\n", pc);
     }
 }
 
-/* updates PC for non-jump commands and increments instructions count */
+/* updates PC  and increments instructions count */
 static void update_pc_and_inst_cnt() {
 	if (!is_jump_or_halt_cmd()) {
 		pc++;
+	}
+	else {
+		pc = next_pc;
 	}
 	if (pc > 0xffff) {
 		pc = 0;
@@ -301,7 +310,7 @@ static void trace_last_line() {
 /* writes memory into sram_out file */
 static void dump_sram_to_file() {
     for (int i = 0; i < MEM_SIZE; i++) {
-        fprintf(sram_out_file,"%08X\n",mem[i]);
+        fprintf(sram_out_file,"%08x\n",mem[i]);
     }
 }
 
@@ -330,8 +339,18 @@ int main(int argc, char *argv[]) {
 		allocate_memory_for_command();
 		while (!is_halt) {
 			parse_command();
-			trace_command();
-			exec_command();
+			if (is_jump_or_halt_cmd()) {
+				exec_command();
+				trace_command();
+				if (is_jump_taken) {
+					update_reg_7();
+					is_jump_taken = false;
+				}
+			}
+			else {
+				trace_command();
+				exec_command();
+			}
 			update_pc_and_inst_cnt();
 		}
 		trace_last_line();
