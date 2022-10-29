@@ -40,15 +40,15 @@ typedef struct {
     unsigned int raw_cmd;
 } command;
 
-unsigned int program_length = 0;
-unsigned int inst_cnt = 0;
-bool is_halt = false;
-signed int regs[8];
-command *cmd;
-FILE *trace_file;
-FILE *sram_out_file;
-FILE *input_file;
-char *input_file_name;
+static unsigned int program_length = 0;
+static unsigned int inst_cnt = 0;
+static bool is_halt = false;
+static signed int regs[8];
+static command *cmd;
+static FILE *trace_file;
+static FILE *sram_out_file;
+static FILE *input_file;
+static char *input_file_name;
 
 #define OPCODE_MASK 0x3E000000
 #define OPCODE_SHIFT 0x19
@@ -106,10 +106,10 @@ static int sign_ext_imm(int imm) {
 
 /* constructs the command from the input line */
 static void parse_command() {
-    cmd->opcode = (mem[pc] >> OPCODE_SHIFT) & OPCODE_MASK;
-    cmd->dst = (mem[pc] >> DST_SHIFT) & DST_MASK;
-    cmd->src0 = (mem[pc] >> SRC0_SHIFT) & SRC0_MASK;
-    cmd->src1 = (mem[pc] >> SRC1_SHIFT) & SRC1_MASK;
+    cmd->opcode = (mem[pc] & OPCODE_MASK) >> OPCODE_SHIFT;
+    cmd->dst = (mem[pc] & DST_MASK) >> DST_SHIFT;
+    cmd->src0 = (mem[pc] & SRC0_MASK) >> SRC0_SHIFT;
+    cmd->src1 = (mem[pc] & SRC1_MASK) >> SRC1_SHIFT;
     cmd->imm = (mem[pc]) & IMM_MASK;
     cmd->raw_cmd = mem[pc];
 
@@ -295,7 +295,8 @@ int main(int argc, char *argv[]) {
 		return -1;
 	}
 	else {
-		open_input_and_output_files(argv[1]);
+		input_file_name = argv[1];
+		open_input_and_output_files();
 		load_memory_from_input_file();
 		trace_first_line();
 		while (!is_halt) {
