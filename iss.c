@@ -323,7 +323,7 @@ static void close_files() {
 
 /* free memory */
 static void free_memory() {
-	free(cmd);
+	//free(cmd);
 }
 
 int main(int argc, char *argv[]) {
@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
 		load_memory_from_input_file();
 		trace_first_line();
 		allocate_memory_for_command();
-		while (!is_halt) {
+		while (!is_halt && inst_cnt < 100) {
 			parse_command();
 			if (is_jump_or_halt_cmd()) {
 				exec_command();
