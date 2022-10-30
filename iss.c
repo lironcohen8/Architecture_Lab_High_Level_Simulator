@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
 		load_memory_from_input_file();
 		trace_first_line();
 		allocate_memory_for_command();
-		while (!is_halt && inst_cnt < 100) {
+		while (!is_halt) {
 			parse_command();
 			if (is_jump_or_halt_cmd()) {
 				exec_command();

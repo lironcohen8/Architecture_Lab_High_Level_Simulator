@@ -51,38 +51,28 @@ static void assemble_program(char *program_name)
 	/*
 	 * Program starts here
 	 */
-	asm_cmd(LD, 2, 0, 1, 1000); // 0: R2 = MEM[1000] = A
-	asm_cmd(LD, 3, 0, 1, 1001); // 1: R3 = MEM[1001] = B
-	asm_cmd(ADD, 4, 0, 1, 1); // 2: R4 = 1
-	asm_cmd(ADD, 5, 0, 1, 31); // 3: R5 = 31
-	asm_cmd(LSF, 4, 4, 5, 0); // 4: R4 = 1 (0**31);
-	asm_cmd(SUB, 5, 4, 1, 1); // 5: R5 = 0 (1**31);
-	asm_cmd(AND, 6, 2, 4, 0); // 6: R6 = R4&R2 = A SIGN
-	asm_cmd(AND, 4, 3, 4, 0); // 7: R4 = R4&R3 = B SIGN
-	asm_cmd(AND, 2, 2, 5, 0); // 8: R2 = R5&R2 = A MAGNITUDE
-	asm_cmd(AND, 3, 3, 5, 0); // 9: R3 = R5&R3 = B MAGNITUDE
-	asm_cmd(JEQ, 0, 6, 4, 18); // 10: JUMP TO 18 IF R6 = R4 SAME SIGN
-	asm_cmd(JLT, 0, 2, 3, 15); // 11: JUMP TO 15 IF |A| < |B|
-	asm_cmd(SUB, 5, 2, 3, 0); // 12: R5 = |A| - |B|
-	asm_cmd(OR, 5, 5, 6, 0); // 13: R5 = A + B (WITH SIGN)
-	asm_cmd(JEQ, 0, 0, 0, 20); // 14: JUMP TO STORE
-	asm_cmd(SUB, 5, 3, 2, 0); // 15: R5 = |B| - |A|
-	asm_cmd(OR, 5, 5, 4, 0); // 16: R5 = A + B (WITH SIGN)
-	asm_cmd(JEQ, 0, 0, 0, 20); // 17: JUMP TO STORE
-	asm_cmd(ADD, 5, 2, 3, 0); // 18: R5 = |A| + |B|
-	asm_cmd(OR, 5, 5, 6, 0); // 19: R5 = A + B (WITH SIGN)
-	asm_cmd(ST, 0, 5, 1, 1002); // 20: STORE RESULT
-	asm_cmd(HLT, 0, 0, 0, 0); // 21: HALT
+	asm_cmd(LD, 2, 0, 1, 1000); // 0: R2 = MEM[1000] = INPUT
+	asm_cmd(ADD, 3, 0, 0, 0); // 1: R3 = 0 = SQRT
+	asm_cmd(JEQ, 0, 0, 0, 5); // 2: JUMP TO MUL START
+	asm_cmd(JLT, 0, 2, 5, 11); // 3: JUMP TO END IF INPUT < MUL_RES // CHECK MUL_RES
+	asm_cmd(ADD, 3, 3, 1, 1); // 4: R3++
+	asm_cmd(ADD, 4, 0, 0, 0); // 5: R4 = 0 = COUNTER // MUL START
+	asm_cmd(ADD, 5, 0, 0, 0); // 6: R5 = 0 = MUL_RES
+	asm_cmd(JLE, 0, 3, 4, 3); // 7: IF SQRT <= COUNTER JUMP TO CHECK MUL_RES // COUNTER CONDITION
+	asm_cmd(ADD, 5, 5, 3, 0); // 8: R5 = R5 + SQRT
+	asm_cmd(ADD, 4, 4, 1, 1); // 9: R4++
+	asm_cmd(JEQ, 0, 0, 0, 7); // 10: JUMP TO COUNTER CONDITION // MUL END
+	asm_cmd(SUB, 3, 3, 1, 1); // 11: R3-- // END
+	asm_cmd(ST, 0, 3, 1, 1001); // 12: STORE RESULT
+	asm_cmd(HLT, 0, 0, 0, 0); // 13: HALT
 	
 	/* 
 	 * Constants are planted into the memory somewhere after the program code:
 	 */
 	// for (i = 0; i < 8; i++)
 	// 	mem[15+i] = i;
-	mem[1000] = 0x80000007;
-	mem[1001] = 0x80000001;
-
-	last_addr = 1002;
+	mem[1000] = 0x57e4;
+	last_addr = 1001;
 
 	fp = fopen(program_name, "w");
 	if (fp == NULL) {
