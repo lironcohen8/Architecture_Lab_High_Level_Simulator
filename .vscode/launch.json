@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}\\iss.exe",
-            "args": ["C:\\Users\\user\\OneDrive\\Desktop\\example.bin"],
+            "args": ["add.bin"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

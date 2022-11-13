@@ -24,26 +24,27 @@ static void open_input_and_output_files() {
 	input_file = fopen(input_file_name, "r");
     if (input_file == NULL) {
         printf("error opening file %s\n", input_file_name);
+		exit(1);
     }
 
 	trace_file = fopen("trace.txt", "w");
 	if (trace_file == NULL) {
         printf("error opening trace file\n");
+		exit(1);
     }
 
 	sram_out_file = fopen("sram_out.txt", "w");
 	if (sram_out_file == NULL) {
         printf("error opening sram out file\n");
+		exit(1);
     }
 }
 
 /* loads memory from input file */
 static void load_memory_from_input_file() {
-	char line_buffer[8];
-
-	while (fgets(line_buffer, 8 + 2, input_file) != NULL) {
-        sscanf_s(line_buffer, "%x", &mem[program_length++]);
-    }
+	while (fscanf(input_file, "%08x",(unsigned int*) &(mem[program_length])) != EOF) {
+		program_length++;
+	}
 }
 
 /* writes the first line of the trace file */
@@ -54,6 +55,10 @@ static void trace_first_line() {
 /* allocates memory for command */
 static void allocate_memory_for_command() {
 	cmd = (command*)malloc(sizeof(command*));
+	if (cmd == NULL) {
+        printf("error allocating memoty to cmd\n");
+		exit(1);
+    }
 }
 
 /* sign extention the imm */
@@ -263,21 +268,31 @@ static void trace_last_line() {
 
 /* writes memory into sram_out file */
 static void dump_sram_to_file() {
-    for (int i = 0; i < MEM_SIZE; i++) {
+	int i = 0;
+    for (i = 0; i < MEM_SIZE; i++) {
         fprintf(sram_out_file,"%08x\n",mem[i]);
     }
 }
 
 /* closes the input and output files */
 static void close_files() {
-	fclose(input_file);
-	fclose(trace_file);
-	fclose(sram_out_file);
+	if (fclose(input_file) != 0) {
+        printf("error closing input file\n");
+		exit(1);
+	}
+	if (fclose(trace_file) != 0) {
+        printf("error closing trace file\n");
+		exit(1);
+	}
+	if (fclose(sram_out_file) != 0) {
+        printf("error closing sram out file\n");
+		exit(1);
+	}	
 }
 
 /* free memory */
 static void free_memory() {
-	//free(cmd);
+	free(cmd);
 }
 
 int main(int argc, char *argv[]) {

@@ -1,3 +1,9 @@
+/*
+ * ISS simulator implementation - h file
+ * Liron Cohen 207481268
+ * Yuval Mor 209011543
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
